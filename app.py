@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from database import init_db, get_all_students, get_all_grades, get_attendance_by_date
+from database import init_db, authenticate_user, get_all_students, get_all_grades, get_attendance_by_date
 from datetime import date
 
 st.set_page_config(
@@ -10,44 +10,61 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize database (safe to call every run)
 try:
     init_db()
 except Exception as e:
     st.error(f"Database initialization failed: {e}")
     st.stop()
 
-# ---------- SIMPLE LOGIN SYSTEM ----------
-APP_PASSWORD = "sona123"  # change this before sharing your app link
-
+# ---------- SESSION STATE ----------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
+if "username" not in st.session_state:
+    st.session_state.username = None
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
 
+# ---------- LOGIN SCREEN ----------
 def login_screen():
     st.title("🎓 Student Management System")
     st.subheader("Login")
+
     with st.form("login_form"):
-        password = st.text_input("Enter Password", type="password")
-        submitted = st.form_submit_button("Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Login", use_container_width=True)
+
         if submitted:
-            if password == APP_PASSWORD:
-                st.session_state.authenticated = True
-                st.rerun()
-            elif password == "":
-                st.warning("Please enter a password.")
+            if not username or not password:
+                st.warning("Please enter both username and password.")
             else:
-                st.error("Incorrect password. Try again.")
+                success, user, message = authenticate_user(username, password)
+                if success:
+                    st.session_state.authenticated = True
+                    st.session_state.user_role = user["role"]
+                    st.session_state.username = user["username"]
+                    st.session_state.user_id = user["id"]
+                    st.rerun()
+                else:
+                    st.error(message)
+
+    st.caption("First time? Default admin login → username: **admin**, password: **admin123**")
 
 if not st.session_state.authenticated:
     login_screen()
     st.stop()
 
 # ---------- LOGGED IN ----------
-
 with st.sidebar:
-    st.success("✅ Logged in")
+    st.success(f"✅ Logged in as **{st.session_state.username}**")
+    st.caption(f"Role: {st.session_state.user_role}")
     if st.button("Logout"):
         st.session_state.authenticated = False
+        st.session_state.user_role = None
+        st.session_state.username = None
+        st.session_state.user_id = None
         st.rerun()
 
 # ---------- WELCOME ANIMATION ----------
@@ -156,4 +173,4 @@ except Exception:
     col3.metric("Grade Entries", "N/A")
 
 st.divider()
-st.info("👈 Open **Students** from the sidebar to add your first student.")
+st.info("👈 Use the sidebar to navigate. As Admin, go to **Users** to create Faculty/Student logins.")
